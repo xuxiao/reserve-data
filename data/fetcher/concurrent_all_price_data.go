@@ -12,14 +12,16 @@ const (
 )
 
 type ConcurrentAllPriceData struct {
-	mu   sync.RWMutex
-	data map[common.TokenPairID]common.OnePrice
+	mu      sync.RWMutex
+	data    map[common.TokenPairID]common.OnePrice
+	getable chan bool
 }
 
 func NewConcurrentAllPriceData() *ConcurrentAllPriceData {
 	return &ConcurrentAllPriceData{
-		mu:   sync.RWMutex{},
-		data: map[common.TokenPairID]common.OnePrice{},
+		mu:      sync.RWMutex{},
+		data:    map[common.TokenPairID]common.OnePrice{},
+		getable: make(chan bool),
 	}
 }
 
@@ -86,8 +88,28 @@ func (self *ConcurrentAllPriceData) UpdateOnePrice(
 	self.data[pair][exchange] = exchangePrice
 }
 
-func (self *ConcurrentAllPriceData) GetData(exchanges []Exchange) map[common.TokenPairID]common.OnePrice {
+func (self *ConcurrentAllPriceData) CheckNewSnapShot(exchanges []Exchange) {
+	checkedList := map[common.ExchangeID]bool{}
+	for _, exchange := range exchanges {
+		exchangeID := exchange.ID()
+		if _, exist := checkedList[exchangeID]; exist {
+			continue
+		}
+		for _, val := range self.data {
+			if _, ok := val[exchangeID]; ok {
+				checkedList[exchangeID] = true
+				break
+			}
+		}
+	}
+	if len(checkedList) == len(exchanges) {
+		self.getable <- true
+	}
+}
+
+func (self *ConcurrentAllPriceData) GetData() map[common.TokenPairID]common.OnePrice {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
+	<-self.getable
 	return self.data
 }
