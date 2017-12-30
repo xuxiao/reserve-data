@@ -81,8 +81,7 @@ func (self *Bitfinex) FetchPriceData(timepoint uint64) (map[common.TokenPairID]c
 
 func (self *Bitfinex) FetchPriceDataUsingSocket() (map[common.TokenPairID]common.ExchangePrice, error) {
 	// TODO: add support for socket later
-	result := map[common.TokenPairID]common.ExchangePrice{}
-	return result, nil
+	panic("Socket has not implemented yet")
 }
 
 func (self *Bitfinex) FetchEBalanceData(timepoint uint64) (common.EBalanceEntry, error) {

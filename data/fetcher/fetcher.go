@@ -321,6 +321,24 @@ func (self *Fetcher) RunOrderbookFetcher(data *ConcurrentAllPriceData) {
 	}
 }
 
+func (self *Fetcher) CheckNewSnapShot(data *ConcurrentAllPriceData) {
+	checkedList := map[common.ExchangeID]bool{}
+	for len(checkedList) < len(self.exchanges) {
+		for _, exchange := range self.exchanges {
+			exchangeID := exchange.ID()
+			if _, exist := checkedList[exchangeID]; exist {
+				continue
+			}
+			for _, val := range data.data {
+				if _, ok := val[exchangeID]; ok {
+					checkedList[exchangeID] = true
+					break
+				}
+			}
+		}
+	}
+}
+
 func (self *Fetcher) FetchOrderbook(timepoint uint64, data *ConcurrentAllPriceData) {
 	// start fetching
 	wait := sync.WaitGroup{}
@@ -331,7 +349,8 @@ func (self *Fetcher) FetchOrderbook(timepoint uint64, data *ConcurrentAllPriceDa
 		}
 	}
 	wait.Wait()
-	err := self.storage.StorePrice(data.GetData(), timepoint)
+	self.CheckNewSnapShot(data)
+	err := self.storage.StorePrice(data.GetData(self.exchanges), timepoint)
 	if err != nil {
 		log.Printf("Storing data failed: %s\n", err)
 	}

@@ -202,6 +202,7 @@ func (self *Bittrex) FetchPriceData(timepoint uint64) (map[common.TokenPairID]co
 
 func (self *Bittrex) FetchPriceDataUsingSocket(exchangePriceChan chan *sync.Map) {
 	// TODO: add support for socket later
+	panic("Socket has not impletmented yet")
 }
 
 func (self *Bittrex) FetchEBalanceData(timepoint uint64) (common.EBalanceEntry, error) {

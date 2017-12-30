@@ -86,7 +86,7 @@ func (self *ConcurrentAllPriceData) UpdateOnePrice(
 	self.data[pair][exchange] = exchangePrice
 }
 
-func (self *ConcurrentAllPriceData) GetData() map[common.TokenPairID]common.OnePrice {
+func (self *ConcurrentAllPriceData) GetData(exchanges []Exchange) map[common.TokenPairID]common.OnePrice {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 	return self.data
