@@ -45,9 +45,9 @@ func (self *Fetcher) Run() error {
 	log.Printf("Fetcher runner is starting...")
 	self.runner.Start()
 	log.Printf("Fetcher runner is running...")
-	data := NewConcurrentAllPriceData()
-	go self.RunOrderbookSocketFetcher(data)
-	go self.RunOrderbookFetcher(data)
+	dataSocket := NewConcurrentAllPriceData()
+	go self.RunOrderbookSocketFetcher(dataSocket)
+	go self.RunOrderbookFetcher(dataSocket)
 	go self.RunAuthDataFetcher()
 	return nil
 }
@@ -311,23 +311,24 @@ func (self *Fetcher) FetchStatusFromExchange(exchange Exchange, pendings []commo
 	return result
 }
 
-func (self *Fetcher) RunOrderbookFetcher(data *ConcurrentAllPriceData) {
+func (self *Fetcher) RunOrderbookFetcher(dataSocket *ConcurrentAllPriceData) {
 	for {
 		log.Printf("waiting for signal from runner orderbook channel")
 		t := <-self.runner.GetOrderbookTicker()
 		log.Printf("got signal in orderbook channel with timestamp %d", common.TimeToTimepoint(t))
-		self.FetchOrderbook(common.TimeToTimepoint(t), data)
+		self.FetchOrderbook(common.TimeToTimepoint(t), dataSocket)
 		log.Printf("fetched data from exchanges")
 	}
 }
 
-func (self *Fetcher) FetchOrderbook(timepoint uint64, data *ConcurrentAllPriceData) {
+func (self *Fetcher) FetchOrderbook(timepoint uint64, dataSocket *ConcurrentAllPriceData) {
+	data := NewConcurrentAllPriceData()
 	// start fetching
 	wait := sync.WaitGroup{}
 	for _, exchange := range self.exchanges {
 		if exchange.DatabusType() == "http" {
 			wait.Add(1)
-			go self.fetchPriceFromExchange(&wait, exchange, data, timepoint)
+			go self.fetchPriceFromExchange(&wait, exchange, data, timepoint, dataSocket)
 		}
 	}
 	wait.Wait()
@@ -337,7 +338,12 @@ func (self *Fetcher) FetchOrderbook(timepoint uint64, data *ConcurrentAllPriceDa
 	}
 }
 
-func (self *Fetcher) fetchPriceFromExchange(wg *sync.WaitGroup, exchange Exchange, data *ConcurrentAllPriceData, timepoint uint64) {
+func (self *Fetcher) fetchPriceFromExchange(
+	wg *sync.WaitGroup,
+	exchange Exchange,
+	data *ConcurrentAllPriceData,
+	timepoint uint64,
+	dataSocket *ConcurrentAllPriceData) {
 	defer wg.Done()
 	exdata, err := exchange.FetchPriceData(timepoint)
 	if err != nil {
@@ -346,10 +352,11 @@ func (self *Fetcher) fetchPriceFromExchange(wg *sync.WaitGroup, exchange Exchang
 	for pair, exchangeData := range exdata {
 		data.SetOnePrice(exchange.ID(), pair, exchangeData)
 	}
+	data.UnifyData(dataSocket.GetCurrentData())
 	data.CheckNewSnapShot(self.exchanges)
 }
 
-func (self *Fetcher) fetchPriceFromExchangeUsingSocket(exchange Exchange, data *ConcurrentAllPriceData) {
+func (self *Fetcher) fetchPriceFromExchangeUsingSocket(exchange Exchange, dataSocket *ConcurrentAllPriceData) {
 	exchangePriceChan := make(chan *sync.Map)
 	exchange.FetchPriceDataUsingSocket(exchangePriceChan)
 	for {
@@ -361,20 +368,20 @@ func (self *Fetcher) fetchPriceFromExchangeUsingSocket(exchange Exchange, data *
 		})
 
 		for pair, exchangeData := range exdata {
-			data.UpdateOnePrice(exchange.ID(), pair, exchangeData)
+			dataSocket.UpdateOnePrice(exchange.ID(), pair, exchangeData)
 		}
 	}
 }
 
-func (self *Fetcher) fetchOrderbookUsingSocket(data *ConcurrentAllPriceData) {
+func (self *Fetcher) fetchOrderbookUsingSocket(dataSocket *ConcurrentAllPriceData) {
 	// start fetching
 	for _, exchange := range self.exchanges {
 		if exchange.DatabusType() == "socket" {
-			go self.fetchPriceFromExchangeUsingSocket(exchange, data)
+			go self.fetchPriceFromExchangeUsingSocket(exchange, dataSocket)
 		}
 	}
 }
 
-func (self *Fetcher) RunOrderbookSocketFetcher(data *ConcurrentAllPriceData) {
-	go self.fetchOrderbookUsingSocket(data)
+func (self *Fetcher) RunOrderbookSocketFetcher(dataSocket *ConcurrentAllPriceData) {
+	go self.fetchOrderbookUsingSocket(dataSocket)
 }

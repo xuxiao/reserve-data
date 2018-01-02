@@ -88,6 +88,22 @@ func (self *ConcurrentAllPriceData) UpdateOnePrice(
 	self.data[pair][exchange] = exchangePrice
 }
 
+func (self *ConcurrentAllPriceData) UnifyData(dataSocket map[common.TokenPairID]common.OnePrice) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	for pair, socketData := range dataSocket {
+		_, exist := self.data[pair]
+		if !exist {
+			self.data[pair] = socketData
+		} else {
+			// insert to data
+			for exchangeID, exchangePrice := range socketData {
+				self.data[pair][exchangeID] = exchangePrice
+			}
+		}
+	}
+}
+
 func (self *ConcurrentAllPriceData) CheckNewSnapShot(exchanges []Exchange) {
 	checkedList := map[common.ExchangeID]bool{}
 	for _, exchange := range exchanges {
@@ -103,8 +119,16 @@ func (self *ConcurrentAllPriceData) CheckNewSnapShot(exchanges []Exchange) {
 		}
 	}
 	if len(checkedList) == len(exchanges) {
-		self.getable <- true
+		go func() {
+			self.getable <- true
+		}()
 	}
+}
+
+func (self *ConcurrentAllPriceData) GetCurrentData() map[common.TokenPairID]common.OnePrice {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+	return self.data
 }
 
 func (self *ConcurrentAllPriceData) GetData() map[common.TokenPairID]common.OnePrice {
