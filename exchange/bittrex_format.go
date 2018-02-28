@@ -21,6 +21,25 @@ type Bittinfo struct {
 	Error string `json:"message"`
 }
 
+type BittrexDepositAddress struct {
+	Success string `json:"success"`
+	Message string `json:"message"`
+	Result  struct {
+		Currency string `json:"Currency"`
+		Address  string `json:"Address"`
+	} `json:"result"`
+}
+
+type BittPairInfo struct {
+	Base      string  `json:"MarketCurrency"`
+	Quote     string  `json:"BaseCurrency"`
+	MinAmount float64 `json:"MinTradeSize"`
+}
+
+type BittExchangeInfo struct {
+	Pairs []BittPairInfo `json:"result"`
+}
+
 type Bittwithdraw struct {
 	Success bool              `json:"success"`
 	Result  map[string]string `json:"result"`
@@ -97,5 +116,23 @@ type Bittdeposithistory struct {
 		TxId          string
 		Confirmations int
 		LastUpdated   string
+	} `json:"result"`
+}
+
+type BittTradeHistory struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Result  []struct {
+		OrderUuid         string  `json:"OrderUuid"`
+		Exchange          string  `json:"Exchange"`
+		TimeStamp         string  `json:"TimeStamp"`
+		OrderType         string  `json:"OrderType"`
+		Limit             float64 `json:"Limit"`
+		Quantity          float64 `json:"Quantity"`
+		QuantityRemaining float64 `json:"QuantityRemaining"`
+		Commission        float64 `json:"Commission"`
+		Price             float64 `json:"Price"`
+		IsConditional     bool    `json:"IsConditional"`
+		ImmediateOrCancel bool    `json:"ImmediateOrCancel"`
 	} `json:"result"`
 }

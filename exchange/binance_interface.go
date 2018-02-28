@@ -9,11 +9,8 @@ import (
 )
 
 type BinanceInterface interface {
-	FetchOnePairData(
-		wg *sync.WaitGroup,
-		pair common.TokenPair,
-		data *sync.Map,
-		timepoint uint64)
+	GetDepthOnePair(
+		pair common.TokenPair, timepoint uint64) (Binaresp, error)
 
 	StoreOrderBookData(
 		wg *sync.WaitGroup,
@@ -34,12 +31,15 @@ type BinanceInterface interface {
 	SocketGetUser(dataChannel chan interface{})
 
 	OpenOrdersForOnePair(
-		wg *sync.WaitGroup,
-		pair common.TokenPair,
-		data *sync.Map,
-		timepoint uint64)
+		pair common.TokenPair, timepoint uint64) (Binaorders, error)
 
 	GetInfo(timepoint uint64) (Binainfo, error)
+
+	GetExchangeInfo() (BinanceExchangeInfo, error)
+
+	GetDepositAddress(tokenID string) (Binadepositaddress, error)
+
+	GetAccountTradeHistory(base, quote common.Token, fromID, timepoint uint64) (BinaAccountTradeHistory, error)
 
 	Withdraw(
 		token common.Token,
@@ -51,13 +51,17 @@ type BinanceInterface interface {
 		tradeType string,
 		base, quote common.Token,
 		rate, amount float64,
-		timepoint uint64) (id string, done float64, remaining float64, finished bool, err error)
+		timepoint uint64) (Binatrade, error)
 
 	CancelOrder(symbol string, id uint64) (Binacancel, error)
 
 	DepositHistory(startTime, endTime uint64) (Binadeposits, error)
 
-	WithdrawHistory(startTime, endTime uint64) (Binawithdrawals, error)
+	WithdrawHistory(
+		startTime, endTime uint64) (Binawithdrawals, error)
 
-	OrderStatus(symbol string, id uint64, timepoint uint64) (Binaorder, error)
+	OrderStatus(
+		symbol string, id uint64, timepoint uint64) (Binaorder, error)
+
+	GetServerTime() (uint64, error)
 }

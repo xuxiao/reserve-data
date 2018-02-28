@@ -61,11 +61,11 @@ func (self *ConcurrentAllPriceData) SetOnePrice(
 	d common.ExchangePrice) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	_, exist := self.data[pair]
+	_, exist := self.data.Data[pair]
 	if !exist {
-		self.data[pair] = common.OnePrice{}
+		self.data.Data[pair] = common.OnePrice{}
 	}
-	self.data[pair][exchange] = d
+	self.data.Data[pair][exchange] = d
 }
 
 func (self *ConcurrentAllPriceData) UpdateOnePrice(

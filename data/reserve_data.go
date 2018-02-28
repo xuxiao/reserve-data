@@ -25,7 +25,8 @@ func (self ReserveData) GetAllPrices(timepoint uint64) (common.AllPriceResponse,
 		result.Version = version
 		result.Timestamp = timestamp
 		result.ReturnTime = returnTime
-		result.Data = data
+		result.Data = data.Data
+		result.Block = data.Block
 		return result, err
 	}
 }
@@ -69,6 +70,7 @@ func (self ReserveData) GetAuthData(timepoint uint64) (common.AuthDataResponse, 
 		result.Data.ReturnTime = data.ReturnTime
 		result.Data.ExchangeBalances = data.ExchangeBalances
 		result.Data.PendingActivities = data.PendingActivities
+		result.Data.Block = data.Block
 		result.Data.ReserveBalances = map[string]common.BalanceResponse{}
 		for tokenID, balance := range data.ReserveBalances {
 			result.Data.ReserveBalances[tokenID] = balance.ToBalanceResponse(
@@ -83,28 +85,106 @@ func (self ReserveData) CurrentRateVersion(timepoint uint64) (common.Version, er
 	return self.storage.CurrentRateVersion(timepoint)
 }
 
-func (self ReserveData) GetAllRates(timepoint uint64) (common.AllRateResponse, error) {
+func isDuplicated(oldData, newData map[string]common.RateResponse) bool {
+	for tokenID, oldElem := range oldData {
+		newelem, ok := newData[tokenID]
+		if !ok {
+			return false
+		}
+		if oldElem.BaseBuy != newelem.BaseBuy {
+			return false
+		}
+		if oldElem.CompactBuy != newelem.CompactBuy {
+			return false
+		}
+		if oldElem.BaseSell != newelem.BaseSell {
+			return false
+		}
+		if oldElem.CompactSell != newelem.CompactSell {
+			return false
+		}
+		if oldElem.Rate != newelem.Rate {
+			return false
+		}
+	}
+	return true
+}
+
+func getOneRateData(rate common.AllRateEntry) map[string]common.RateResponse {
+	//get data from rate object and return the data.
+	data := map[string]common.RateResponse{}
+	for tokenID, r := range rate.Data {
+		data[tokenID] = common.RateResponse{
+			Valid:       rate.Valid,
+			Error:       rate.Error,
+			Timestamp:   rate.Timestamp,
+			ReturnTime:  rate.ReturnTime,
+			BaseBuy:     common.BigToFloat(r.BaseBuy, 18),
+			CompactBuy:  r.CompactBuy,
+			BaseSell:    common.BigToFloat(r.BaseSell, 18),
+			CompactSell: r.CompactSell,
+			Block:       r.Block,
+		}
+	}
+	return data
+}
+
+func (self ReserveData) GetRates(fromTime, toTime uint64) ([]common.AllRateResponse, error) {
+	result := []common.AllRateResponse{}
+	rates, err := self.storage.GetRates(fromTime, toTime)
+	if err != nil {
+		return result, err
+	}
+	//current: the unchanged one so far
+	current := common.AllRateResponse{}
+	for _, rate := range rates {
+		one := common.AllRateResponse{}
+		one.Timestamp = rate.Timestamp
+		one.ReturnTime = rate.ReturnTime
+		one.Error = rate.Error
+		one.Valid = rate.Valid
+		one.Data = getOneRateData(rate)
+		one.BlockNumber = rate.BlockNumber
+		//if one is the same as current
+		if isDuplicated(one.Data, current.Data) {
+			if len(result) > 0 {
+				result[len(result)-1].ToBlockNumber = one.BlockNumber
+			} else {
+				one.ToBlockNumber = one.BlockNumber
+			}
+		} else {
+			one.ToBlockNumber = rate.BlockNumber
+			result = append(result, one)
+			current = one
+		}
+	}
+
+	return result, nil
+}
+func (self ReserveData) GetRate(timepoint uint64) (common.AllRateResponse, error) {
 	timestamp := common.GetTimestamp()
 	version, err := self.storage.CurrentRateVersion(timepoint)
 	if err != nil {
 		return common.AllRateResponse{}, err
 	} else {
 		result := common.AllRateResponse{}
-		rates, err := self.storage.GetAllRates(version)
+		rates, err := self.storage.GetRate(version)
 		returnTime := common.GetTimestamp()
 		result.Version = version
 		result.Timestamp = timestamp
 		result.ReturnTime = returnTime
-		data := map[common.TokenPairID]common.RateResponse{}
-		for tokenPairID, rate := range rates.Data {
-			data[tokenPairID] = common.RateResponse{
+		data := map[string]common.RateResponse{}
+		for tokenID, rate := range rates.Data {
+			data[tokenID] = common.RateResponse{
 				Valid:       rates.Valid,
 				Error:       rates.Error,
 				Timestamp:   rates.Timestamp,
 				ReturnTime:  rates.ReturnTime,
-				Rate:        common.BigToFloat(rate.Rate, 18),
-				ExpiryBlock: rate.ExpiryBlock.Int64(),
-				Balance:     common.BigToFloat(rate.Balance, 18),
+				BaseBuy:     common.BigToFloat(rate.BaseBuy, 18),
+				CompactBuy:  rate.CompactBuy,
+				BaseSell:    common.BigToFloat(rate.BaseSell, 18),
+				CompactSell: rate.CompactSell,
+				Block:       rate.Block,
 			}
 		}
 		result.Data = data
@@ -112,12 +192,21 @@ func (self ReserveData) GetAllRates(timepoint uint64) (common.AllRateResponse, e
 	}
 }
 
-func (self ReserveData) GetRecords() ([]common.ActivityRecord, error) {
-	return self.storage.GetAllRecords()
+func (self ReserveData) GetRecords(fromTime, toTime uint64) ([]common.ActivityRecord, error) {
+	return self.storage.GetAllRecords(fromTime, toTime)
 }
 
 func (self ReserveData) GetPendingActivities() ([]common.ActivityRecord, error) {
 	return self.storage.GetPendingActivities()
+}
+
+func (self ReserveData) GetTradeLogs(fromTime uint64, toTime uint64) ([]common.TradeLog, error) {
+	return self.storage.GetTradeLogs(fromTime, toTime)
+}
+
+func (self ReserveData) GetTradeHistory(timepoint uint64) (common.AllTradeHistory, error) {
+	data, err := self.storage.GetTradeHistory(timepoint)
+	return data, err
 }
 
 func (self ReserveData) Run() error {
