@@ -43,9 +43,10 @@ func run(verify *Verification) {
 	depositExchange := depositCmd.String("exchange", "", "Exchange to deposit to")
 	depositBaseUrl := depositCmd.String("base_url", "", "Core host")
 
-	// withdrawAmount := withdrawCmd.Float64("amount", 0, "Amount to withdraw")
-	// withdrawToken := withdrawCmd.String("token", "", "Token to withdraw")
-	// withdrawBaseUrl := withdrawCmd.String("base_url", "", "Core host")
+	withdrawAmount := withdrawCmd.Float64("amount", 0, "Amount to withdraw")
+	withdrawToken := withdrawCmd.String("token", "", "Token to withdraw")
+	withdrawExchange := withdrawCmd.String("exchange", "", "Exchange to withdraw from")
+	withdrawBaseUrl := withdrawCmd.String("base_url", "", "Core host")
 
 	switch os.Args[1] {
 	case "verify":
@@ -100,6 +101,41 @@ func run(verify *Verification) {
 			log.Panic(err.Error())
 		}
 		log.Printf("Deposit result: %v", result)
+	}
+
+	if withdrawCmd.Parsed() {
+		var amountStr string
+		var token common.Token
+		var err error
+		if *withdrawBaseUrl != "" {
+			verify.UpdateBaseUrl(*withdrawBaseUrl)
+		}
+		if *withdrawToken != "" {
+			token, err = common.GetToken(*withdrawToken)
+			if err != nil {
+				log.Println(err.Error)
+				os.Exit(1)
+			}
+		} else {
+			log.Println("Token cannot be empty")
+			os.Exit(1)
+		}
+
+		if *withdrawAmount > 0 {
+			amountStr = getTokenAmount(*withdrawAmount, token)
+		} else {
+			log.Println("Amount must bigger than 0")
+		}
+
+		if *withdrawExchange == "" {
+			log.Println("Exchange cannot be empty")
+		}
+		timepoint := common.GetTimepoint()
+		result, err := verify.Withdraw(*withdrawExchange, *withdrawToken, amountStr, timepoint)
+		if err != nil {
+			log.Panic(err.Error())
+		}
+		log.Printf("Withdraw result: %v", result)
 	}
 }
 
