@@ -8,21 +8,18 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/KyberNetwork/reserve-data/common"
 	ihttp "github.com/KyberNetwork/reserve-data/http"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
-
-const BASE_URL = "http://localhost:8000"
 
 type Verification struct {
 	auth      ihttp.Authentication
 	exchanges []string
+	base_url  string
 }
 
 type DepositWithdrawResponse struct {
@@ -37,6 +34,10 @@ var (
 	Warning *log.Logger
 	Error   *log.Logger
 )
+
+func (self *Verification) UpdateBaseUrl(base_url string) {
+	self.base_url = base_url
+}
 
 func InitLogger(
 	traceHandle io.Writer,
@@ -66,10 +67,9 @@ func (self *Verification) fillRequest(req *http.Request, signNeeded bool, timepo
 	req.Header.Add("Accept", "application/json")
 	if signNeeded {
 		q := req.URL.Query()
-		sig := url.Values{}
 		q.Set("nonce", fmt.Sprintf("%d", timepoint))
-		sig.Set("signature", self.auth.KNSign(q.Encode()))
-		req.URL.RawQuery = q.Encode() + "&" + sig.Encode()
+		req.URL.RawQuery = q.Encode()
+		req.Header.Add("signed", self.auth.KNSign(q.Encode()))
 	}
 }
 
@@ -106,7 +106,7 @@ func (self *Verification) GetPendingActivities(timepoint uint64) ([]common.Activ
 	result := []common.ActivityRecord{}
 	resp_body, err := self.GetResponse(
 		"GET",
-		BASE_URL+"/immediate-pending-activities",
+		self.base_url+"/immediate-pending-activities",
 		map[string]string{},
 		true,
 		timepoint,
@@ -121,7 +121,7 @@ func (self *Verification) GetActivities(timepoint uint64) ([]common.ActivityReco
 	result := []common.ActivityRecord{}
 	resp_body, err := self.GetResponse(
 		"GET",
-		BASE_URL+"/activities",
+		self.base_url+"/activities",
 		map[string]string{},
 		true,
 		timepoint,
@@ -136,7 +136,7 @@ func (self *Verification) GetAuthData(timepoint uint64) (common.AuthDataResponse
 	result := common.AuthDataResponse{}
 	resp_body, err := self.GetResponse(
 		"GET",
-		BASE_URL+"/authdata",
+		self.base_url+"/authdata",
 		map[string]string{},
 		true,
 		timepoint,
@@ -150,9 +150,10 @@ func (self *Verification) GetAuthData(timepoint uint64) (common.AuthDataResponse
 func (self *Verification) Deposit(
 	exchange, token, amount string, timepoint uint64) (common.ActivityID, error) {
 	result := DepositWithdrawResponse{}
+	log.Println("Start deposit")
 	resp_body, err := self.GetResponse(
 		"POST",
-		BASE_URL+"/deposit/"+exchange,
+		self.base_url+"/deposit/"+exchange,
 		map[string]string{
 			"amount": amount,
 			"token":  token,
@@ -175,7 +176,7 @@ func (self *Verification) Withdraw(
 	result := DepositWithdrawResponse{}
 	resp_body, err := self.GetResponse(
 		"POST",
-		BASE_URL+"/withdraw/"+exchange,
+		self.base_url+"/withdraw/"+exchange,
 		map[string]string{
 			"amount": amount,
 			"token":  token,
@@ -252,11 +253,11 @@ func (self *Verification) CheckActivities(activityID common.ActivityID, timepoin
 func (self *Verification) VerifyDeposit() error {
 	var err error
 	timepoint := common.GetTimepoint()
-	token := "ETH"
-	amount := hexutil.EncodeUint64(1)
+	token, err := common.GetToken("ETH")
+	amount := getTokenAmount(0.5, token)
 	Info.Println("Start deposit to exchanges")
 	for _, exchange := range self.exchanges {
-		activityID, err := self.Deposit(exchange, token, amount, timepoint)
+		activityID, err := self.Deposit(exchange, token.ID, amount, timepoint)
 		if err != nil {
 			Error.Println(err.Error())
 			return err
@@ -272,10 +273,10 @@ func (self *Verification) VerifyDeposit() error {
 func (self *Verification) VerifyWithdraw() error {
 	var err error
 	timepoint := common.GetTimepoint()
-	token := "ETH"
-	amount := hexutil.EncodeUint64(1)
+	token, err := common.GetToken("ETH")
+	amount := getTokenAmount(0.5, token)
 	for _, exchange := range self.exchanges {
-		activityID, err := self.Withdraw(exchange, token, amount, timepoint)
+		activityID, err := self.Withdraw(exchange, token.ID, amount, timepoint)
 		if err != nil {
 			Error.Println(err.Error())
 			return err
@@ -289,7 +290,6 @@ func (self *Verification) VerifyWithdraw() error {
 }
 
 func (self *Verification) RunVerification() {
-	InitLogger(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
 	Info.Println("Start verification")
 	self.VerifyDeposit()
 	self.VerifyWithdraw()
@@ -302,5 +302,6 @@ func NewVerification(
 	return &Verification{
 		auth,
 		exchanges,
+		"http://localhost:8000",
 	}
 }
