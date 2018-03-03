@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -62,7 +63,13 @@ func run(verify *Verification) {
 			log.Panic(err.Error())
 		}
 	case "getauthdata":
-		verify.GetAuthData(common.GetTimepoint())
+		authData, err := verify.GetAuthData(common.GetTimepoint())
+		if err != nil {
+			log.Println(err.Error())
+			os.Exit(1)
+		}
+		jsonString, _ := json.Marshal(authData)
+		log.Println("Authdata", string(jsonString))
 	default:
 		printUsage()
 		os.Exit(1)
